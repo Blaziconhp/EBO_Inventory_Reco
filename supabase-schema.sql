@@ -6,6 +6,7 @@ create table if not exists public.variance_reports (
   id uuid primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
   report_name text not null,
+  reconciliation_month text not null default 'Legacy',
   category text not null default 'FG' check (category in ('FG', 'Sample', 'Others')),
   source_files jsonb not null default '[]'::jsonb,
   raw_sheets jsonb not null default '{}'::jsonb,
@@ -21,6 +22,8 @@ create table if not exists public.variance_reports (
 
 alter table public.variance_reports add column if not exists raw_sheets jsonb not null default '{}'::jsonb;
 alter table public.variance_reports add column if not exists updated_at timestamptz not null default now();
+alter table public.variance_reports add column if not exists reconciliation_month text not null default 'Legacy';
+create index if not exists variance_reports_reconciliation_month_idx on public.variance_reports (reconciliation_month, updated_at desc);
 alter table public.variance_reports enable row level security;
 
 drop policy if exists "Users can read their variance reports" on public.variance_reports;
