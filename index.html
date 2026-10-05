@@ -115,7 +115,7 @@
     const __downloadWorkbookBinding=downloadWorkbook;
     const SUPABASE_URL='https://soxutzfkhojpgaikdyyk.supabase.co';
     const SUPABASE_ANON_KEY='sb_publishable_H2PXiCuJuJzbbBP7ohAWzg_lMN5dbmT';
-    const PRIMARY_EMAIL='harsh.p@boheco.com';
+    const PRIMARY_EMAILS=['harsh.p@boheco.com','rachana.s@boheco.com'];
     const CURRENT_REPORT_ID='00000000-0000-0000-0000-000000000001';
     const supabaseClient=window.supabase?.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
     let authGate,authControls,saveButton,authMode='password';
@@ -140,7 +140,7 @@
     const __renderWithAuth=render;render=function(){if(!state.user){if($('emptyState'))$('emptyState').style.display='none';if($('reportApp'))$('reportApp').style.display='none';syncAuthUi();return}__renderWithAuth();syncAuthUi()};
     const __readFilesWithAuth=readFiles;readFiles=async function(files){await __readFilesWithAuth(files);syncAuthUi()};
     render=renderDashboard;saveCurrentReport=saveMonthlyReport;const __baseSyncForMonthly=syncAuthUi;syncAuthUi=function(){__baseSyncForMonthly();syncEboUploadUi()};
-    const handleSession=async session=>{state.user=session?.user||null;state.isPrimary=Boolean(state.user&&(state.user.email||'').toLowerCase()===PRIMARY_EMAIL);render();if(state.user)await loadMonthlyReports()};
+    const handleSession=async session=>{state.user=session?.user||null;state.isPrimary=Boolean(state.user&&PRIMARY_EMAILS.includes((state.user.email||'').toLowerCase()));render();if(state.user)await loadMonthlyReports()};
     /* Overall-workbook workflow: one file may contain all EBO sheets. */
     const __readOverallWorkbook=readFiles;
     readFiles=async function(files){await __readOverallWorkbook(files);state.sourceRows=state.sourceRows.map(row=>row.EBO==='Delhi'?{...row,EBO:'South Delhi'}:row);if(state.sourceRows.length){buildReport();render()}syncAuthUi()};
