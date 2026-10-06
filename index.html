@@ -286,6 +286,18 @@
     function summarySalesForRows(rows){const months=selectedSummaryMonthKeys();let units=0,cogs=0,hasCogs=false;months.forEach(month=>{const value=salesForRows(rows,month);units+=Number(value.SalesUnits)||0;if(value.SalesCOGS!==null&&value.SalesCOGS!==undefined){cogs+=Number(value.SalesCOGS)||0;hasCogs=true}});return{SalesUnits:units,SalesCOGS:hasCogs?cogs:null}}
     const __summaryDataWithSelectedSales=summaryData;
     summaryData=function(){const result=__summaryDataWithSelectedSales();const detail=result.detail;result.inventory=result.inventory.map(row=>({...row,...summarySalesForRows(detail.filter(item=>item.EBO===row.EBO))}));result.variance=result.variance.map(row=>{let rows=row.EBO==='All EBOs'?detail:detail.filter(item=>item.EBO===row.EBO);if(row.Type==='Negative variance')rows=rows.filter(item=>item.Variance<0);if(row.Type==='Positive variance')rows=rows.filter(item=>item.Variance>0);return{...row,...summarySalesForRows(rows)}});result.totals={...result.totals,...summarySalesForRows(detail)};return result};
+    /* Performance: index sales rows once instead of scanning the full workbook for every table cell. */
+    let __salesIndexRows=null,__salesIndexPrices=null,__salesIndex=null;
+    function __salesIndexKey(ebo,sku,month){return salesEboName(ebo)+'|'+salesSkuKey(sku)+'|'+salesMonthToken(month)}
+    function __ensureSalesIndex(){
+      if(__salesIndexRows===state.salesRows&&__salesIndexPrices===state.customPriceRows){return}
+      __salesIndexRows=state.salesRows;__salesIndexPrices=state.customPriceRows;__salesIndex=new Map();
+      (state.salesRows||[]).forEach(row=>{const key=__salesIndexKey(row.EBO,row.SKU,row.Month),item=__salesIndex.get(key)||{units:0,direct:0,directCount:0,unitCogs:0,unitCogsCount:0};const units=Number(row.Units)||0;item.units+=units;const direct=n(row.SalesCOGS);const unitCogs=n(row.COGS);if(direct!==null){item.direct+=direct;item.directCount++}if(unitCogs!==null){item.unitCogs+=units*unitCogs;item.unitCogsCount++}__salesIndex.set(key,item)});
+    }
+    const __salesLookupIndexed=function(ebo,sku,month){__ensureSalesIndex();const target=salesMonthToken(month)||activeSalesMonth(),item=__salesIndex.get(__salesIndexKey(ebo,sku,target))||{units:0,direct:0,directCount:0,unitCogs:0,unitCogsCount:0},price=salesPriceMap().get(salesSkuKey(sku)),priceCogs=n(price?.COGS);return{SalesUnits:item.units,SalesCOGS:item.directCount?item.direct:(item.unitCogsCount?item.unitCogs:(priceCogs===null?null:item.units*priceCogs))}};
+    salesLookup=__salesLookupIndexed;
+    let __salesPriceRows=null,__salesPriceCustom=null,__salesPriceReport=null,__salesPriceIndex=null;
+    salesPriceMap=function(){const reportPrices=state.report?.prices||[];if(__salesPriceRows!==state.salesRows||__salesPriceCustom!==state.customPriceRows||__salesPriceReport!==reportPrices){__salesPriceRows=state.salesRows;__salesPriceCustom=state.customPriceRows;__salesPriceReport=reportPrices;const all=[...reportPrices,...(state.customPriceRows||[]),...FINAL_PRICE_MASTER];__salesPriceIndex=new Map(all.filter(x=>x?.SKU).map(x=>[salesSkuKey(x.SKU),x]))}return __salesPriceIndex};
     createAuthUi();if(!state.user){$('emptyState').style.display='none';$('reportApp').style.display='none'}syncAuthUi();
     if(supabaseClient){supabaseClient.auth.onAuthStateChange((_event,session)=>{void handleSession(session)});supabaseClient.auth.getSession().then(({data})=>{void handleSession(data.session)})}else{authNotice('Supabase client did not load. Refresh the page and try again.',true);render()}
   })();
