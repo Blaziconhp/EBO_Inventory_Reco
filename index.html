@@ -298,7 +298,9 @@
     salesLookup=__salesLookupIndexed;
     let __salesPriceRows=null,__salesPriceCustom=null,__salesPriceReport=null,__salesPriceIndex=null;
     salesPriceMap=function(){const reportPrices=state.report?.prices||[];if(__salesPriceRows!==state.salesRows||__salesPriceCustom!==state.customPriceRows||__salesPriceReport!==reportPrices){__salesPriceRows=state.salesRows;__salesPriceCustom=state.customPriceRows;__salesPriceReport=reportPrices;const all=[...reportPrices,...(state.customPriceRows||[]),...FINAL_PRICE_MASTER];__salesPriceIndex=new Map(all.filter(x=>x?.SKU).map(x=>[salesSkuKey(x.SKU),x]))}return __salesPriceIndex};
-    /* Monthly reconciliation tables always use sales for their own month and EBO × SKU set. */
+    /* Monthly reconciliation sales use every uploaded sales SKU for that EBO and month. */
+    function monthlySalesCategory(row){const price=salesPriceMap().get(salesSkuKey(row.SKU))||{},type=String(price.Type||price.Category||row.Type||row.Category||'').trim().toLowerCase();if(type.includes('sample'))return'Samples';if(type==='fg'||type.includes('finished'))return'FG';return'Unidentified'}
+    function monthlySalesForEbo(ebo,month){const target=salesMonthToken(month),canonical=salesEboName(ebo),source=(state.salesRows||[]).filter(row=>salesEboName(row.EBO)===canonical&&salesMonthToken(row.Month)===target),eligible=state.category==='Overall'?source:source.filter(row=>monthlySalesCategory(row)===state.category),sales=salesForRows(eligible,target);return{SalesUnits:sales.SalesUnits||0,SalesCOGS:sales.SalesCOGS??0}}
     monthlyEboRows=function(entry){
       const previousReport=state.report,previousSalesMonth=state.salesMonth;
       try{
@@ -306,8 +308,8 @@
         state.salesMonth=salesMonthToken(entry.month)||'NO_SALES_MONTH';
         const summary=__summaryDataWithSelectedSales(),cumulative=new Map(summary.variance.filter(row=>row.Type==='Cumulative').map(row=>[row.EBO,row]));
         const rows=summary.inventory.filter(row=>row.EBO!=='All EBOs').map(row=>{
-          const variance=cumulative.get(row.EBO)||{},sales=salesForRows(summary.detail.filter(item=>item.EBO===row.EBO),state.salesMonth);
-          return{Month:monthLabel(entry.month),EBO:row.EBO,Zoho:row.Zoho,Physical:row.Physical,Variance:row.Net,InventoryMRP:row.InventoryMRP,InventoryCOGS:row.InventoryCOGS,VarianceMRP:variance.MRP??0,VarianceCOGS:variance.COGS??0,SalesUnits:sales.SalesUnits||0,SalesCOGS:sales.SalesCOGS??0};
+          const variance=cumulative.get(row.EBO)||{},sales=monthlySalesForEbo(row.EBO,entry.month);
+          return{Month:monthLabel(entry.month),EBO:row.EBO,Zoho:row.Zoho,Physical:row.Physical,Variance:row.Net,InventoryMRP:row.InventoryMRP,InventoryCOGS:row.InventoryCOGS,VarianceMRP:variance.MRP??0,VarianceCOGS:variance.COGS??0,SalesUnits:sales.SalesUnits,SalesCOGS:sales.SalesCOGS};
         }).sort((a,b)=>{const ai=EBO_ORDER.indexOf(a.EBO),bi=EBO_ORDER.indexOf(b.EBO);return(ai<0?EBO_ORDER.length:ai)-(bi<0?EBO_ORDER.length:bi)||a.EBO.localeCompare(b.EBO)});
         const t=summary.totals;rows.push({Month:monthLabel(entry.month),EBO:'All EBOs',Zoho:t.zoho,Physical:t.physical,Variance:t.net,InventoryMRP:t.invMrp,InventoryCOGS:t.invCogs,VarianceMRP:t.varMrp,VarianceCOGS:t.varCogs,SalesUnits:sum(rows,'SalesUnits'),SalesCOGS:sum(rows,'SalesCOGS')});
         return rows.map(row=>({...row,VariancePct:Number(row.SalesCOGS)>0?row.VarianceCOGS/row.SalesCOGS*100:null}));
